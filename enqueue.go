@@ -46,11 +46,9 @@ func Enqueue(queue string, class string, args []interface{}) (err error) {
 	}
 
 	// Push job in redis
-	err = conn.Send("RPUSH", fmt.Sprintf("%squeue:%s", namespace, queue), b)
-	if err != nil {
+	if err = conn.Cmd("RPUSH", fmt.Sprintf("%squeue:%s", namespace, queue), b).Err; err != nil {
 		return
 	}
 
-	conn.Flush()
 	return
 }

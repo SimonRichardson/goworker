@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fzzy/radix/redis"
 	"github.com/youtube/vitess/go/pools"
 	"golang.org/x/net/context"
 )
@@ -29,16 +30,19 @@ func (p *poller) getJob(conn *redisConn) (*job, error) {
 	for _, queue := range p.queues(p.isStrict) {
 		logger.Debugf("Checking %s", queue)
 
-		reply, err := conn.Do("LPOP", fmt.Sprintf("%squeue:%s", namespace, queue))
-		if err != nil {
+		reply := conn.Cmd("LPOP", fmt.Sprintf("%squeue:%s", namespace, queue))
+
+		if err := reply.Err; err != nil {
 			return nil, err
 		}
-		if reply != nil {
+
+		if reply != nil && reply.Type != redis.NilReply {
 			logger.Debugf("Found job on %s", queue)
 
 			job := &job{Queue: queue}
 
-			if err := json.Unmarshal(reply.([]byte), &job.Payload); err != nil {
+			value := reply.String()
+			if err := json.Unmarshal([]byte(value), &job.Payload); err != nil {
 				return nil, err
 			}
 			return job, nil
@@ -101,8 +105,7 @@ func (p *poller) poll(pool *pools.ResourcePool, interval time.Duration, quit <-c
 						}
 					}
 					if job != nil {
-						conn.Send("INCR", fmt.Sprintf("%sstat:processed:%v", namespace, p))
-						conn.Flush()
+						conn.Cmd("INCR", fmt.Sprintf("%sstat:processed:%v", namespace, p))
 						pool.Put(conn)
 						select {
 						case jobs <- job:
@@ -119,8 +122,7 @@ func (p *poller) poll(pool *pools.ResourcePool, interval time.Duration, quit <-c
 							}
 
 							conn := resource.(*redisConn)
-							conn.Send("LPUSH", fmt.Sprintf("%squeue:%s", namespace, job.Queue), buf)
-							conn.Flush()
+							conn.Cmd("LPUSH", fmt.Sprintf("%squeue:%s", namespace, job.Queue), buf)
 							return
 						}
 					} else {

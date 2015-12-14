@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/garyburd/redigo/redis"
+	"github.com/fzzy/radix/redis"
 	"github.com/youtube/vitess/go/pools"
 )
 
@@ -15,11 +15,15 @@ var (
 )
 
 type redisConn struct {
-	redis.Conn
+	Client *redis.Client
+}
+
+func (r *redisConn) Cmd(cmd string, args ...interface{}) *redis.Reply {
+	return r.Client.Cmd(cmd, args...)
 }
 
 func (r *redisConn) Close() {
-	_ = r.Conn.Close()
+	r.Client.Close()
 }
 
 func newRedisFactory(uri string) pools.Factory {
@@ -66,20 +70,18 @@ func redisConnFromUri(uriString string) (*redisConn, error) {
 	}
 
 	if password != "" {
-		_, err := conn.Do("AUTH", password)
-		if err != nil {
+		if conn.Cmd("AUTH", password).Err != nil {
 			conn.Close()
 			return nil, err
 		}
 	}
 
 	if db != "" {
-		_, err := conn.Do("SELECT", db)
-		if err != nil {
+		if conn.Cmd("SELECT", db).Err != nil {
 			conn.Close()
 			return nil, err
 		}
 	}
 
-	return &redisConn{Conn: conn}, nil
+	return &redisConn{conn}, nil
 }
