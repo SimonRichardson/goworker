@@ -42,6 +42,7 @@ type WorkerOptions struct {
 	MinConnections int
 	MaxConnections int
 	Timeout        time.Duration
+	URI            string
 }
 
 func WorkWithOptions(options WorkerOptions) error {
@@ -49,7 +50,13 @@ func WorkWithOptions(options WorkerOptions) error {
 	if err != nil {
 		return err
 	}
-	p := newRedisPool(uri, options.MinConnections, options.MaxConnections, options.Timeout)
+
+	redisUri := uri
+	if options.URI != "" {
+		redisUri = options.URI
+	}
+
+	p := newRedisPool(redisUri, options.MinConnections, options.MaxConnections, options.Timeout)
 	defer p.Close()
 	return startWithPool(p)
 }
